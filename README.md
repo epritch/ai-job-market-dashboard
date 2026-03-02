@@ -26,7 +26,7 @@ is impacting the job market using real-world data.
 5. Displays interpretable visual insights
 
 ## Live App
-🚀 *(Link will appear here after deployment)*
+🚀 https://ai-job-market-dashboard-5ebfp3kuvkcmdzqwc9rb8n.streamlit.app/
 
 ## Author
 **Evan Pritchard**  
