@@ -33,6 +33,36 @@ def basic_clean(df: pd.DataFrame) -> pd.DataFrame:
     for c in obj_cols:
         df[c] = df[c].astype(str).str.strip()
 
+    # -----------------------------
+    # Convert selected categorical columns to numeric
+    # -----------------------------
+    if "AI_Adoption_Level" in df.columns:
+        df["AI_Adoption_Level"] = df["AI_Adoption_Level"].map({
+            "Low": 1,
+            "Medium": 2,
+            "High": 3
+        })
+
+    if "Automation_Risk" in df.columns:
+        df["Automation_Risk"] = df["Automation_Risk"].map({
+            "Low": 1,
+            "Medium": 2,
+            "High": 3
+        })
+
+    if "Job_Growth_Projection" in df.columns:
+        df["Job_Growth_Projection"] = df["Job_Growth_Projection"].map({
+            "Decline": -1,
+            "Stable": 0,
+            "Growth": 1
+        })
+
+    if "Remote_Friendly" in df.columns:
+        df["Remote_Friendly"] = df["Remote_Friendly"].map({
+            "Yes": 1,
+            "No": 0
+        })
+
     return df
 
 
@@ -71,16 +101,24 @@ numeric_cols, cat_cols = infer_column_groups(df)
 # -----------------------------
 st.sidebar.subheader("Feature Selection")
 
+default_numeric = [c for c in ["Salary_USD", "Automation_Risk", "AI_Adoption_Level"] if c in numeric_cols]
+if not default_numeric:
+    default_numeric = numeric_cols[: min(4, len(numeric_cols))]
+
+default_cat = [c for c in ["Job_Title", "Industry", "Company_Size"] if c in cat_cols]
+if not default_cat:
+    default_cat = cat_cols[: min(3, len(cat_cols))]
+
 selected_numeric = st.sidebar.multiselect(
     "Numeric features",
     options=numeric_cols,
-    default=numeric_cols[: min(4, len(numeric_cols))]
+    default=default_numeric
 )
 
 selected_cat = st.sidebar.multiselect(
     "Categorical features",
     options=cat_cols,
-    default=cat_cols[: min(3, len(cat_cols))]
+    default=default_cat
 )
 
 if len(selected_numeric) == 0 and len(selected_cat) == 0:
