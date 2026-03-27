@@ -26,13 +26,9 @@ def load_data(csv_path: str) -> pd.DataFrame:
 
 
 def basic_clean(df: pd.DataFrame) -> pd.DataFrame:
-    # Drop fully empty columns
     df = df.dropna(axis=1, how="all")
-
-    # Strip whitespace from column names
     df.columns = [c.strip() for c in df.columns]
 
-    # Strip whitespace in string columns
     obj_cols = df.select_dtypes(include=["object"]).columns
     for c in obj_cols:
         df[c] = df[c].astype(str).str.strip()
@@ -139,7 +135,6 @@ with st.spinner("Running preprocessing + PCA + clustering..."):
     explained_var = model.named_steps["pca"].explained_variance_ratio_
     total_var = explained_var.sum()
 
-    # Silhouette score requires at least 2 clusters and enough rows
     sil_score = None
     if len(df) > k:
         try:
@@ -150,7 +145,6 @@ with st.spinner("Running preprocessing + PCA + clustering..."):
 df_result = df.copy()
 df_result["cluster"] = cluster_labels
 
-# PCA plotting frame
 plot_df = pd.DataFrame(pca_coords[:, :2], columns=["PC1", "PC2"])
 plot_df["cluster"] = cluster_labels
 
@@ -177,6 +171,43 @@ st.caption(
     "Higher PCA variance explained means the reduced dimensions preserve more of the original structure. "
     "A higher silhouette score generally indicates more separated and cohesive clusters."
 )
+
+# -----------------------------
+# Silhouette comparison across k
+# -----------------------------
+st.subheader("Silhouette Score Comparison Across k Values")
+
+k_values = list(range(2, 9))
+scores = []
+
+for k_test in k_values:
+    try:
+        kmeans_test = KMeans(n_clusters=k_test, n_init=10, random_state=42)
+        labels_test = kmeans_test.fit_predict(prep_data)
+        score = silhouette_score(prep_data, labels_test)
+    except Exception:
+        score = None
+    scores.append(score)
+
+sil_df = pd.DataFrame({
+    "k": k_values,
+    "silhouette_score": scores
+})
+
+sil_col1, sil_col2 = st.columns([1, 1.2])
+
+with sil_col1:
+    st.dataframe(sil_df, use_container_width=True)
+
+with sil_col2:
+    sil_fig = px.line(
+        sil_df,
+        x="k",
+        y="silhouette_score",
+        markers=True,
+        title="Silhouette Score vs Number of Clusters"
+    )
+    st.plotly_chart(sil_fig, use_container_width=True)
 
 # -----------------------------
 # Layout: charts + insights
@@ -211,6 +242,31 @@ with col2:
     st.dataframe(df_result.head(15), use_container_width=True)
 
 # -----------------------------
+# Cluster summary cards
+# -----------------------------
+st.subheader("Cluster Overview Cards")
+
+if len(selected_numeric) > 0:
+    for cluster_id in sorted(df_result["cluster"].unique()):
+        cluster_data = df_result[df_result["cluster"] == cluster_id]
+
+        st.markdown(f"### Cluster {cluster_id}")
+        c1, c2, c3 = st.columns(3)
+
+        c1.metric("Count", len(cluster_data))
+
+        avg_feature_1 = cluster_data[selected_numeric[0]].mean()
+        c2.metric(f"Avg {selected_numeric[0]}", f"{avg_feature_1:.2f}")
+
+        if len(selected_numeric) > 1:
+            avg_feature_2 = cluster_data[selected_numeric[1]].mean()
+            c3.metric(f"Avg {selected_numeric[1]}", f"{avg_feature_2:.2f}")
+        else:
+            c3.metric("Features Used", len(selected_numeric))
+else:
+    st.info("Select at least one numeric feature to generate cluster overview cards.")
+
+# -----------------------------
 # Cluster summary statistics
 # -----------------------------
 st.subheader("Cluster Summary Statistics")
@@ -223,6 +279,40 @@ if len(summary_numeric) > 0:
     st.dataframe(cluster_summary, use_container_width=True)
 else:
     st.info("Select at least one numeric feature to generate cluster summary statistics.")
+
+# -----------------------------
+# PCA loadings / feature influence
+# -----------------------------
+st.subheader("PCA Feature Influence")
+
+try:
+    pca_model = model.named_steps["pca"]
+    feature_names = model.named_steps["prep"].get_feature_names_out()
+
+    loadings = pd.DataFrame(
+        pca_model.components_.T,
+        columns=[f"PC{i+1}" for i in range(pca_components)],
+        index=feature_names
+    )
+
+    top_pc1 = loadings["PC1"].abs().sort_values(ascending=False).head(10)
+    top_pc1_df = top_pc1.reset_index()
+    top_pc1_df.columns = ["feature", "importance"]
+
+    load_fig = px.bar(
+        top_pc1_df,
+        x="feature",
+        y="importance",
+        title="Top Features Influencing PC1"
+    )
+    st.plotly_chart(load_fig, use_container_width=True)
+
+    with st.expander("View PCA Loadings Table"):
+        st.dataframe(loadings.round(3), use_container_width=True)
+
+except Exception as e:
+    st.info("PCA loadings could not be displayed for the current feature configuration.")
+    st.caption(f"Details: {e}")
 
 # -----------------------------
 # Interpretation text
@@ -274,6 +364,23 @@ if len(selected_numeric) > 0:
     st.plotly_chart(box_fig, use_container_width=True)
 else:
     st.info("Select at least one numeric feature to enable cluster comparison plots.")
+
+# -----------------------------
+# Four-cluster narrative
+# -----------------------------
+st.subheader("Four-Cluster Narrative")
+
+st.markdown(
+    """
+- **Cluster 0:** May represent higher-salary and more technical roles that still show meaningful automation exposure.  
+- **Cluster 1:** May include lower-risk roles spread across industries, suggesting greater resilience to AI-driven change.  
+- **Cluster 2:** May capture mid-range roles with mixed automation risk, reflecting transitional job categories.  
+- **Cluster 3:** May reflect specialized or skill-intensive roles with lower automation risk, suggesting protection through complexity, creativity, or task diversity.  
+
+**Overall takeaway:**  
+The cluster structure suggests that AI’s impact on the job market is not driven by salary alone. Instead, job vulnerability appears to depend on a combination of skills, task structure, and industry context.
+"""
+)
 
 # -----------------------------
 # Early analytical insights
